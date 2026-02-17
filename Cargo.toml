@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "circuits",
+    "client",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+# Arkworks dependencies
+ark-bn254 = "0.4.0"
+ark-ff = "0.4.0"
+ark-std = "0.4.0"
+ark-serialize = "0.4.0"
+
+# General dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hex = "0.4"
+rand = "0.8"
+thiserror = "1.0"

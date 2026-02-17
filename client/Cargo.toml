@@ -1,0 +1,20 @@
+[package]
+name = "privacy-erc20-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+privacy-erc20-circuits = { path = "../circuits" }
+ark-bn254 = "0.4.0"
+ark-ff = "0.4.0"
+ark-std = "0.4.0"
+ark-serialize = "0.4.0"
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+rand.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+rand = "0.8"
