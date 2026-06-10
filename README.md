@@ -1,114 +1,115 @@
-# Privacy ERC20 (隐私 ERC20 协议)
+# Compliant Privacy Stablecoin (合规隐私稳定币协议)
 
-基于 [Lambdaworks](https://github.com/lambdaclass/lambdaworks) 构建的隐私增强 ERC20 代币协议。
+基于零知识证明（ZK Proofs）与分布式门限审计（Threshold Cryptography）构建的**可审计、强合规隐私稳定币转账协议**。
 
-## 概述
+## 🌟 核心特性
 
-本项目实现了一个类似 Tornado Cash / Zcash Sapling 的隐私转账机制：
+本项目在提供用户交易隐私的同时，融合了去中心化的链上合规审计监管机制，实现以下三大核心特性：
 
-- **隐藏金额**: 交易金额被加密，外部观察者无法得知
-- **隐藏发送者/接收者**: 使用零知识证明验证交易有效性，无需暴露身份
-- **防止双花**: 使用 Nullifier 机制确保每笔资金只能花费一次
+1. **零知识交易隐私**: 隐藏交易金额、发送者与接收者，利用 Poseidon 密码学哈希构建的 Merkle 树及 ZK 证明防范双花与地址冒用。
+2. **分布式门限审计 (3-of-5 Threshold Auditing)**:
+   - 采用 **椭圆曲线 ElGamal (Threshold EC-ElGamal)** 与 **分布式密钥生成 (DKG)** 算法。
+   - 5 个审计节点各自生成本地私钥碎片与公钥承诺，通过合约聚合最终形成唯一的全局审计公钥。
+   - 用户发送交易时，用该全局公钥加密对称审计密钥，并将密文存储在链上交易事件中。
+   - 任何单点或两点审计节点都无法解密交易。只有当 3 个或更多受认可的审计节点联合授权时，方可提取链上密文解密还原交易详情。
+3. **合规性双轨制 (KYC/POI)**:
+   - **轨道 A (去中心化 POI)**: 用户提款时需提交“干净资金树根自证证明”以拦截洗钱。
+   - **轨道 B (前置 KYC 签名)**: 合规服务商预审白名单签名，前置掐断黑钱。
 
-## 项目结构
+---
+
+## 📂 项目结构
 
 ```
-privacy-erc20/
-├── circuits/           # ZK 电路定义 (Rust)
+compliant-privacy-stablecoin/
+├── circuits/           # ZK 电路与约束模块 (Circom & Rust)
+│   ├── circom/         # .circom 源代码 (Joinsplit 与 Merkle 树)
+│   └── src/            # Rust 电路本地约束校验
+├── client/             # 链下客户端/钱包/审计工具 (Rust)
 │   └── src/
-│       ├── lib.rs
-│       ├── note.rs     # Note 数据结构与承诺计算
-│       └── merkle.rs   # Merkle 树工具
-├── client/             # 客户端/钱包 (Rust)
-│   └── src/
-│       ├── lib.rs
-│       └── wallet.rs   # 钱包管理
-├── contracts/          # 智能合约 (Solidity)
-│   └── src/
-│       └── ShieldedPool.sol
+│       ├── audit.rs    # 3-of-5 门限加密、DKG 与解密算法核心
+│       ├── wallet.rs   # 隐私 Note 与钱包状态管理
+│       └── bin/
+│           ├── dkg_gen.rs            # 本地多项式模拟 DKG 与测试 JSON 导出
+│           ├── audit_verify.rs       # 链上日志抓取与部分解密验证
+│           └── audit_full_verify.rs  # 全流程端到端 (E2E) 门限审计解密工具
+├── contracts/          # 智能合约与部署脚本 (Solidity & Foundry)
+│   ├── src/
+│   │   ├── ShieldedPool.sol  # 隐私代币屏蔽池主合约
+│   │   ├── AuditRegistry.sol # 审计节点多签与 DKG 链上公示合约
+│   │   └── Verifier.sol      # 编译电路自动生成的 ZK 证明校验器
+│   ├── script/
+│   │   ├── Deploy.s.sol            # 合约本地一键部署脚本
+│   │   ├── TestAuditLive.s.sol     # 链上局部审计交互脚本
+│   │   └── TestFullE2EFlow.s.sol   # 全流程 Deposit-Transact-Withdraw 广播脚本
+│   └── test/
+│       ├── ShieldedPool.t.sol      # 隐私主池单元测试
+│       └── AuditRegistry.t.sol     # 链上 DKG 联合校验单元测试
 └── README.md
 ```
 
-## 核心概念
+---
 
-### Note (票据)
+## 🚀 编译与测试运行指南
 
-一个 Note 代表一笔加密的资金：
+### 前提要求
+- **Rust nightly** (用于构建密码学及电路约束)
+- **Foundry** (`forge` 和 `anvil`)
+- **Circom** (可选，用于重新编译 `.circom` 逻辑)
 
-```
-Note = {
-    amount: u64,      // 金额
-    secret: FE,       // 秘密值 (私钥派生)
-    blinding: FE      // 盲化因子 (随机数)
-}
-```
-
-### Commitment (承诺)
-
-Note 的公开表示，存储在链上 Merkle 树中：
-
-```
-Commitment = Poseidon(amount, secret, blinding)
-```
-
-### Nullifier (无效符)
-
-用于防止双花的唯一标识：
-
-```
-Nullifier = Poseidon(secret, leaf_index)
-```
-
-## 编译与测试
-
-### 要求
-
-- Rust nightly (lambdaworks 依赖)
-- Foundry (智能合约)
-
-### 编译 Rust 代码
-
+### 1. 编译并运行本地 Rust 密码学测试
 ```bash
-cd privacy-erc20
-cargo +nightly build
-cargo +nightly test
+# 编译并执行客户端本地单元测试 (包含 DKG 流程与钱包测试)
+cargo +nightly test -p compliant-privacy-stablecoin-client
 ```
 
-### 编译智能合约
-
+### 2. 生成 DKG 测试数据 JSON
+在发起任何链上广播前，需运行 DKG 生成二进制，将多节点生成的随机多项式承诺、加密碎片和全局审计公钥写入配置文件：
 ```bash
-cd privacy-erc20/contracts
+cargo +nightly run --bin dkg_gen
+```
+*输出路径*：`contracts/test/dkg_test_data.json`
+
+### 3. 智能合约测试 (Forge Fork Simulation)
+```bash
+cd contracts
+# 安装依赖
 forge install
-forge build
-forge test
+# 本地沙盒分叉测试
+forge test -vvv
 ```
 
-## 工作流程
+### 4. 运行全流程端到端链上测试 (E2E On-chain Broadcast)
 
-1. **存款 (Deposit)**:
-   - 用户在本地创建 Note
-   - 计算 Commitment
-   - 调用 `ShieldedPool.deposit(commitment, amount)`
-   - Commitment 被添加到链上 Merkle 树
+利用 Anvil 模拟真实区块链环境，发起包括部署、DKG 完成、Alice 存款、Alice 隐私转账给 Bob、Bob 取款的全业务流程：
 
-2. **转账 (Transfer)**:
-   - 用户在本地生成 ZK 证明
-   - 证明证明自己拥有某些 Notes，且金额守恒
-   - 调用 `ShieldedPool.transact(proof, ...)`
-   - 旧 Notes 的 Nullifiers 被标记为已用
-   - 新 Commitments 被添加到树中
+```bash
+# 步骤 A: 启动本地 Anvil 开发节点 (保持后台运行)
+anvil --host 127.0.0.1 --port 8545
 
-3. **提款 (Withdraw)**:
-   - 与转账类似，但 `publicAmount` 为负数
-   - 合约将代币转给指定接收地址
+# 步骤 B: 运行全流程交互脚本并将真实交易广播发布到 Anvil 链上
+cd contracts
+forge script script/TestFullE2EFlow.s.sol:TestFullE2EFlowScript --rpc-url http://127.0.0.1:8545 --broadcast --legacy
 
-## 安全考虑
+# 步骤 C: 运行 Rust 审计监督客户端抓取 Anvil 链上日志并执行门限解密
+cd ..
+cargo +nightly run --bin audit_full_verify
+```
 
-- ZK 证明确保交易有效性
-- Nullifier 防止双花
-- Merkle Tree 根历史验证防止恶意篡改
-- 建议使用 Poseidon 哈希 (ZK 友好) 替代 Keccak256
+---
 
-## 许可证
+## 🔒 密码学与审计防线机制
+
+- **Note (资金凭证)**: $Note = \{amount, secret, blinding\}$。
+- **Commitment (公开承诺值)**: $Commitment = Poseidon(amount, secret, blinding)$。
+- **Nullifier (双花防御无效符)**: $Nullifier = Poseidon(secret, leaf\_index)$。
+- **混合加密双向承诺 (Hybrid Encryption)**:
+  - 链下：用户基于 DKG 阶段聚合生成的 `globalAuditPublicKey` 加密一笔交易的临时对称密钥，密文保存至链上 `Transact` 事件。
+  - 链上 ZK 电路约束：电路强制约束 Poseidon 对称哈希加密的交易详情与上链的对称密钥属同一来源。
+  - 审计解密：3/5 门限私钥碎片（基于拉格朗日系数 $\lambda_j$ 计算局部解密点 $D_j = sk_j \cdot R$）重组共享秘密，最终在不泄露各节点私钥的前提下，还原交易明文。
+
+---
+
+## 📄 许可证
 
 Apache-2.0
