@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
-use privacy_erc20_client::audit::{PrivateKeyShare, EncryptedAuditKey};
+use compliant_privacy_stablecoin_client::audit::{PrivateKeyShare, EncryptedAuditKey};
 use ark_bn254::Fr;
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 

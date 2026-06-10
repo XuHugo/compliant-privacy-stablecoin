@@ -2,8 +2,8 @@
 //!
 //! 管理用户的隐私 Note 和相关状态。
 
-use privacy_erc20_circuits::merkle::MerkleTree;
-use privacy_erc20_circuits::note::{random_field_element, Note, FE};
+use compliant_privacy_stablecoin_circuits::merkle::MerkleTree;
+use compliant_privacy_stablecoin_circuits::note::{random_field_element, Note, FE};
 use std::collections::HashMap;
 
 /// 钱包中存储的 Note 信息
@@ -97,7 +97,7 @@ impl Wallet {
     }
 
     /// 获取指定 Note 的 Merkle 路径
-    pub fn get_merkle_path(&self, leaf_index: usize) -> privacy_erc20_circuits::merkle::MerklePath {
+    pub fn get_merkle_path(&self, leaf_index: usize) -> compliant_privacy_stablecoin_circuits::merkle::MerklePath {
         self.tree.get_path(leaf_index)
     }
 }

@@ -1,11 +1,11 @@
 [package]
-name = "privacy-erc20-client"
+name = "compliant-privacy-stablecoin-client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-privacy-erc20-circuits = { path = "../circuits" }
+compliant-privacy-stablecoin-circuits = { path = "../circuits" }
 ark-bn254 = "0.4.0"
 ark-ec = "0.4.0"
 ark-ff = "0.4.0"

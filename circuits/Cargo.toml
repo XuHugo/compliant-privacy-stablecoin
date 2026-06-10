@@ -1,5 +1,5 @@
 [package]
-name = "privacy-erc20-circuits"
+name = "compliant-privacy-stablecoin-circuits"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -5,7 +5,7 @@ use rand::rngs::OsRng;
 use serde::Serialize;
 use std::fs::File;
 use std::io::Write;
-use privacy_erc20_client::audit::{DkgPolynomial, PrivateKeyShare, AuditPublicKey, EncryptedAuditKey};
+use compliant_privacy_stablecoin_client::audit::{DkgPolynomial, PrivateKeyShare, AuditPublicKey, EncryptedAuditKey};
 
 #[derive(Serialize)]
 struct NodeDkgData {
