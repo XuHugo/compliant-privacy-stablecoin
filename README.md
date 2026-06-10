@@ -53,20 +53,20 @@ compliant-privacy-stablecoin/
 ## 🚀 编译与测试运行指南
 
 ### 前提要求
-- **Rust nightly** (用于构建密码学及电路约束)
+- **Rust (Stable >= 1.84.0)** (用于构建密码学及电路约束)
 - **Foundry** (`forge` 和 `anvil`)
 - **Circom** (可选，用于重新编译 `.circom` 逻辑)
 
 ### 1. 编译并运行本地 Rust 密码学测试
 ```bash
 # 编译并执行客户端本地单元测试 (包含 DKG 流程与钱包测试)
-cargo +nightly test -p compliant-privacy-stablecoin-client
+cargo test -p compliant-privacy-stablecoin-client
 ```
 
 ### 2. 生成 DKG 测试数据 JSON
 在发起任何链上广播前，需运行 DKG 生成二进制，将多节点生成的随机多项式承诺、加密碎片和全局审计公钥写入配置文件：
 ```bash
-cargo +nightly run --bin dkg_gen
+cargo run --bin dkg_gen
 ```
 *输出路径*：`contracts/test/dkg_test_data.json`
 
@@ -93,7 +93,7 @@ forge script script/TestFullE2EFlow.s.sol:TestFullE2EFlowScript --rpc-url http:/
 
 # 步骤 C: 运行 Rust 审计监督客户端抓取 Anvil 链上日志并执行门限解密
 cd ..
-cargo +nightly run --bin audit_full_verify
+cargo run --bin audit_full_verify
 ```
 
 ---
