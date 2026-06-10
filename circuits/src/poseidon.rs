@@ -1,6 +1,5 @@
 use ark_bn254::Fr;
 use ark_ff::Field;
-use ark_std::ToString;
 use std::str::FromStr;
 use scalarff::{Bn128FieldElement, FieldElement};
 use poseidon_bn128::poseidon;
@@ -27,7 +26,6 @@ pub fn poseidon_hash_3(inputs: [Fr; 3]) -> Fr {
 // Helpers
 
 fn ark_fr_to_scalarff(fr: Fr) -> Bn128FieldElement {
-    let s = fr.to_string();
     // arkworks display format can be "123" or "BigInt(123)". Let's check format.
     // Usually it's decimal string.
     

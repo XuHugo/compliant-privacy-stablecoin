@@ -7,6 +7,4 @@
 //! - `prover`: 生成零知识证明
 
 pub mod wallet;
-
-// 后续添加:
-// pub mod prover;
+pub mod audit;

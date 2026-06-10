@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 privacy-erc20-circuits = { path = "../circuits" }
 ark-bn254 = "0.4.0"
+ark-ec = "0.4.0"
 ark-ff = "0.4.0"
 ark-std = "0.4.0"
 ark-serialize = "0.4.0"
@@ -15,6 +16,7 @@ serde_json.workspace = true
 hex.workspace = true
 rand.workspace = true
 thiserror.workspace = true
+sha2 = "0.10"
 
 [dev-dependencies]
 rand = "0.8"

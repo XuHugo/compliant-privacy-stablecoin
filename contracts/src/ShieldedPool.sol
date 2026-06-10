@@ -2,7 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./IVerifier.sol";
 import "./IPoseidon.sol";
@@ -56,6 +58,12 @@ contract ShieldedPool is ReentrancyGuard {
     /// @notice Poseidon 哈希合约 (2个输入)
     address public poseidon2;
 
+    /// @notice 合规签名者公钥地址 (轨道 B)
+    address public complianceSigner;
+
+    /// @notice 认证的干净树根列表 (轨道 A)
+    mapping(bytes32 => bool) public approvedCleanRoots;
+
     // ============ 事件 ============
 
     /// @notice 存款事件
@@ -65,12 +73,14 @@ contract ShieldedPool is ReentrancyGuard {
         uint256 timestamp
     );
 
-    /// @notice 交易事件 (包含提款)
+    /// @notice 交易事件 (包含提款与审计数据)
     event Transact(
         bytes32 indexed nullifier1,
         bytes32 indexed nullifier2,
         bytes32 commitment1,
-        bytes32 commitment2
+        bytes32 commitment2,
+        bytes encryptedAuditData,
+        uint256[4] auditCiphertext
     );
 
     /// @notice 提款事件
@@ -78,14 +88,31 @@ contract ShieldedPool is ReentrancyGuard {
 
     // ============ 构造函数 ============
 
+    address public owner;
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    function setComplianceSigner(address _signer) external onlyOwner {
+        complianceSigner = _signer;
+    }
+
+    function setApprovedCleanRoot(bytes32 root, bool approved) external onlyOwner {
+        approvedCleanRoots[root] = approved;
+    }
+
     /**
      * @param _token 底层 ERC20 代币地址
      * @param _verifier ZK 验证器合约地址
      */
-    constructor(address _token, address _verifier, address _poseidon2) {
+    constructor(address _token, address _verifier, address _poseidon2, address _complianceSigner) {
+        owner = msg.sender;
         token = IERC20(_token);
         verifier = _verifier;
         poseidon2 = _poseidon2;
+        complianceSigner = _complianceSigner;
 
         // 初始化零值数组
         zeros[0] = bytes32(0);
@@ -105,8 +132,8 @@ contract ShieldedPool is ReentrancyGuard {
     // ============ 外部函数 ============
 
     /**
-     * @notice 存款: 将代币存入屏蔽池
-     * @param commitment 用户计算的 Commitment (Poseidon(amount, secret, blinding))
+     * @notice 存款: 将代币存入屏蔽池 (无合规签名，仅供测试或纯轨道A)
+     * @param commitment 用户计算的 Commitment
      * @param amount 存款金额
      */
     function deposit(bytes32 commitment, uint256 amount) external nonReentrant {
@@ -124,6 +151,34 @@ contract ShieldedPool is ReentrancyGuard {
     }
 
     /**
+     * @notice 存款与合规签名: 支持 Permit 无 Gas 存款
+     */
+    function depositWithPermitAndCompliance(
+        bytes32 commitment,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v, bytes32 r, bytes32 s,
+        bytes calldata complianceSignature
+    ) external nonReentrant {
+        require(nextLeafIndex < MAX_LEAVES, "Tree is full");
+        require(commitment != bytes32(0), "Invalid commitment");
+        require(amount > 0, "Amount must be positive");
+
+        if (complianceSigner != address(0)) {
+            bytes32 messageHash = keccak256(abi.encodePacked(commitment, msg.sender, amount));
+            bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+            address signer = ECDSA.recover(ethSignedMessageHash, complianceSignature);
+            require(signer == complianceSigner, "Invalid compliance signature");
+        }
+
+        IERC20Permit(address(token)).permit(msg.sender, address(this), amount, deadline, v, r, s);
+        token.safeTransferFrom(msg.sender, address(this), amount);
+
+        _insert(commitment);
+        emit Deposit(commitment, nextLeafIndex - 1, block.timestamp);
+    }
+
+    /**
      * @notice 交易: 花费旧 Notes，创建新 Notes
      * @param proof ZK 证明 (ABI 编码)
      * @param root 引用的 Merkle Root
@@ -137,15 +192,25 @@ contract ShieldedPool is ReentrancyGuard {
     function transact(
         bytes calldata proof,
         bytes32 root,
+        bytes32 cleanTreeRoot,
         bytes32 nullifier1,
         bytes32 nullifier2,
         bytes32 commitment1,
         bytes32 commitment2,
         int256 publicAmount,
-        address recipient
+        address recipient,
+        address relayer,
+        uint256 relayerFee,
+        bytes calldata encryptedAuditData,
+        uint256[4] calldata auditCiphertext
     ) external nonReentrant {
         // 验证 Root 有效
         require(roots[root], "Invalid root");
+
+        // 验证 POI 干净树根 (轨道 A)
+        if (cleanTreeRoot != bytes32(0)) {
+            require(approvedCleanRoots[cleanTreeRoot], "Unapproved clean root");
+        }
 
         // 验证 Nullifiers 未被使用
         require(!nullifiers[nullifier1], "Nullifier1 already spent");
@@ -156,11 +221,16 @@ contract ShieldedPool is ReentrancyGuard {
             _verifyProof(
                 proof,
                 root,
+                cleanTreeRoot,
                 nullifier1,
                 nullifier2,
                 commitment1,
                 commitment2,
-                publicAmount
+                publicAmount,
+                relayerFee,
+                recipient,
+                relayer,
+                auditCiphertext
             ),
             "Invalid proof"
         );
@@ -183,13 +253,23 @@ contract ShieldedPool is ReentrancyGuard {
             token.safeTransferFrom(msg.sender, address(this), uint256(publicAmount));
         } else if (publicAmount < 0) {
             // 提款
-            require(recipient != address(0), "Invalid recipient");
             uint256 withdrawAmount = uint256(-publicAmount);
-            token.safeTransfer(recipient, withdrawAmount);
-            emit Withdrawal(recipient, withdrawAmount);
+            require(withdrawAmount >= relayerFee, "Fee exceeds withdrawal");
+            
+            if (relayerFee > 0) {
+                require(relayer != address(0), "Invalid relayer");
+                token.safeTransfer(relayer, relayerFee);
+            }
+            
+            uint256 netWithdrawAmount = withdrawAmount - relayerFee;
+            if (netWithdrawAmount > 0) {
+                require(recipient != address(0), "Invalid recipient");
+                token.safeTransfer(recipient, netWithdrawAmount);
+                emit Withdrawal(recipient, netWithdrawAmount);
+            }
         }
 
-        emit Transact(nullifier1, nullifier2, commitment1, commitment2);
+        emit Transact(nullifier1, nullifier2, commitment1, commitment2, encryptedAuditData, auditCiphertext);
     }
 
     /**
@@ -270,11 +350,16 @@ contract ShieldedPool is ReentrancyGuard {
     function _verifyProof(
         bytes calldata proof,
         bytes32 root,
+        bytes32 cleanTreeRoot,
         bytes32 nullifier1,
         bytes32 nullifier2,
         bytes32 commitment1,
         bytes32 commitment2,
-        int256 publicAmount
+        int256 publicAmount,
+        uint256 fee,
+        address recipient,
+        address relayer,
+        uint256[4] calldata auditCiphertext
     ) internal view returns (bool) {
         if (verifier == address(0)) {
             return true;
@@ -286,14 +371,21 @@ contract ShieldedPool is ReentrancyGuard {
             uint256[2] memory c
         ) = abi.decode(proof, (uint256[2], uint256[2][2], uint256[2]));
 
-        uint256[7] memory publicInputs;
+        uint256[14] memory publicInputs;
         publicInputs[0] = uint256(root);
-        publicInputs[1] = uint256(nullifier1);
-        publicInputs[2] = uint256(nullifier2);
-        publicInputs[3] = uint256(commitment1);
-        publicInputs[4] = uint256(commitment2);
-        publicInputs[5] = uint256(uint256(publicAmount));
-        publicInputs[6] = 0; // fee
+        publicInputs[1] = uint256(cleanTreeRoot);
+        publicInputs[2] = uint256(nullifier1);
+        publicInputs[3] = uint256(nullifier2);
+        publicInputs[4] = uint256(commitment1);
+        publicInputs[5] = uint256(commitment2);
+        publicInputs[6] = uint256(uint256(publicAmount));
+        publicInputs[7] = fee;
+        publicInputs[8] = uint256(uint160(recipient));
+        publicInputs[9] = uint256(uint160(relayer));
+        publicInputs[10] = auditCiphertext[0];
+        publicInputs[11] = auditCiphertext[1];
+        publicInputs[12] = auditCiphertext[2];
+        publicInputs[13] = auditCiphertext[3];
 
         return IVerifier(verifier).verifyProof(a, b, c, publicInputs);
     }
