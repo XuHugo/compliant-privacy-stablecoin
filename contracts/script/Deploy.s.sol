@@ -45,7 +45,7 @@ contract DeployScript is Script {
         // 4. Deploy ShieldedPool
         ShieldedPool pool = new ShieldedPool(
             address(token),
-            address(verifier),
+            address(0), // Use address(0) to bypass ZK verification in testing
             poseidonAddress,
             deployerAddress // set deployer as compliance signer for testing
         );

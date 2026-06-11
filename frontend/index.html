@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>合规隐私稳定币 - 链上 DKG 注册与审计控制台</title>
+    <link rel="stylesheet" href="style.css?v=3">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Ethers.js UMD -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+</head>
+<body>
+    <div class="stars-bg"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo-area">
+                <i class="fa-solid fa-shield-halved logo-icon"></i>
+                <div class="logo-text">
+                    <h1>COMPLIANT STABLECOIN</h1>
+                    <p>链上分布式密钥生成 (DKG) & 门限审计合规控制台</p>
+                </div>
+            </div>
+            <div class="wallet-section">
+                <button id="btn-connect-wallet" class="btn btn-primary btn-glow">
+                    <i class="fa-brands fa-ethereum"></i> <span>连接 MetaMask 钱包</span>
+                </button>
+                <div id="wallet-info" class="wallet-card hidden">
+                    <div class="wallet-status">
+                        <span class="status-indicator online"></span>
+                        <span id="txt-auditor-role" class="badge">未登录</span>
+                        <button id="btn-disconnect" class="btn-link font-small" style="margin-left: 10px; color: var(--color-accent); text-decoration: none; font-weight: bold;"><i class="fa-solid fa-power-off"></i> 断开</button>
+                    </div>
+                    <span id="txt-wallet-address" class="address-text">0x...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Top Navigation -->
+        <nav class="main-nav">
+            <button class="nav-btn active" data-view="view-dkg">
+                <i class="fa-solid fa-key"></i> <span>DKG 设置控制台</span>
+            </button>
+            <button class="nav-btn" data-view="view-wallet">
+                <i class="fa-solid fa-wallet"></i> <span>用户隐私钱包</span>
+            </button>
+            <button class="nav-btn" data-view="view-audit">
+                <i class="fa-solid fa-magnifying-glass-chart"></i> <span>合规审计查询</span>
+            </button>
+        </nav>
+
+        <!-- View 1: DKG Console -->
+        <div id="view-dkg" class="view-content">
+            <main class="main-grid">
+                <!-- Left Side: DKG Progress Stepper -->
+                <section class="stepper-panel card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-bars-staged text-gradient"></i> DKG 注册与设置向导</h2>
+                        <span class="subtitle">逐步引导 5 个审计节点建立门限密钥</span>
+                        <div class="info-alert" style="margin-top: 10px; font-size: 0.8rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); padding: 8px; border-radius: 8px; color: #93C5FD;">
+                            <i class="fa-solid fa-circle-info"></i> <strong>账户切换提示：</strong> 请在 MetaMask 插件内手动切换账户 (Auditor 1-5)。若页面未自动刷新，请点击右上角“断开”按钮。
+                        </div>
+                    </div>
+
+                    <div class="stepper">
+                        <!-- Step 1 -->
+                        <div class="step-item active" id="step-1-item">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h3>本地生成多项式与通信密钥</h3>
+                                <p>在本地生成私有二级多项式、承诺及通信公钥。</p>
+                                <div class="step-action-area">
+                                    <div class="node-id-select-row">
+                                        <label for="select-node-id">选择您的审计节点 ID:</label>
+                                        <select id="select-node-id" class="form-select">
+                                            <option value="1">审计节点 1 (Auditor 1)</option>
+                                            <option value="2">审计节点 2 (Auditor 2)</option>
+                                            <option value="3">审计节点 3 (Auditor 3)</option>
+                                            <option value="4">审计节点 4 (Auditor 4)</option>
+                                            <option value="5">审计节点 5 (Auditor 5)</option>
+                                        </select>
+                                    </div>
+                                    <div class="btn-row">
+                                        <button id="btn-step1-generate" class="btn btn-secondary">
+                                            <i class="fa-solid fa-wand-magic-sparkles"></i> 1.1 生成本地密钥
+                                        </button>
+                                        <button id="btn-step1-register" class="btn btn-success" disabled>
+                                            <i class="fa-solid fa-cloud-arrow-up"></i> 1.2 注册到区块链
+                                        </button>
+                                    </div>
+                                    <div id="step1-output" class="console-output hidden"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div class="step-item" id="step-2-item">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h3>计算并向链上提交加密碎片</h3>
+                                <p>读取各节点的通信公钥，在本地计算加密多项式评估碎片 $s_{i,j}$ 并广播至链上。</p>
+                                <div class="step-action-area">
+                                    <button id="btn-step2-submit" class="btn btn-primary" disabled>
+                                        <i class="fa-solid fa-paper-plane"></i> 计算并提交 DKG 碎片
+                                    </button>
+                                    <div id="step2-output" class="console-output hidden"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3 -->
+                        <div class="step-item" id="step-3-item">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h3>拉取并聚合我专属的私钥碎片 ($sk_j$)</h3>
+                                <p>从智能合约抓取其他 4 个节点发给你的加密碎片，本地解密并聚合出最终的私钥碎片。</p>
+                                <div class="step-action-area">
+                                    <button id="btn-step3-aggregate" class="btn btn-primary" disabled>
+                                        <i class="fa-solid fa-compress"></i> 聚合私钥碎片
+                                    </button>
+                                    <div id="step3-output" class="console-output hidden"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4 -->
+                        <div class="step-item" id="step-4-item">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <h3>公示全局审计公钥</h3>
+                                <p>聚合 5 个节点的 DKG 承诺得到唯一的全局审计公钥，并在链上进行公示。</p>
+                                <div class="step-action-area">
+                                    <button id="btn-step4-finalize" class="btn btn-accent" disabled>
+                                        <i class="fa-solid fa-signature"></i> 公示全局审计公钥
+                                    </button>
+                                    <div id="step4-output" class="console-output hidden"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Right Side: Contract Info & Decryption Panel -->
+                <div class="right-panel">
+                    <!-- Contract Status Widget -->
+                    <section class="status-card card">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-circle-nodes text-gradient"></i> 链上 DKG 状态监控</h2>
+                        </div>
+                        <div class="status-grid">
+                            <div class="status-row">
+                                <span class="status-label">合约部署地址:</span>
+                                <span id="txt-contract-address" class="mono-text font-small">0x...</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">DKG 全局状态:</span>
+                                <span id="txt-dkg-status" class="status-badge status-pending">未完成 DKG</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">全局审计公钥 (G1):</span>
+                                <div id="txt-global-pubkey" class="mono-text text-truncate font-small" style="max-width: 280px;">未公示</div>
+                            </div>
+                        </div>
+
+                        <div class="nodes-table-container">
+                            <h3>各节点注册状态</h3>
+                            <table class="nodes-table">
+                                <thead>
+                                    <tr>
+                                        <th>节点 ID</th>
+                                        <th>以太坊地址</th>
+                                        <th>通信公钥</th>
+                                        <th>多项式承诺</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nodes-table-body">
+                                    <tr><td colspan="4" class="text-center">请连接钱包加载数据...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Decryption / Audit Console -->
+                    <section class="audit-card card">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-unlock-keyhole text-gradient"></i> 门限解密与合规审计控制台</h2>
+                            <span class="subtitle">任何审计机构收集 3 个节点的局部解密份额即可还原对称密钥</span>
+                        </div>
+
+                        <div class="audit-tabs">
+                            <button class="tab-btn active" data-tab="tab-encrypt">模拟交易加密</button>
+                            <button class="tab-btn" data-tab="tab-decrypt">门限解密审计</button>
+                        </div>
+
+                        <div class="tab-content" id="tab-encrypt">
+                            <div class="form-group">
+                                <label for="input-sym-key">对称密钥 (32字节 Hex，默认自动生成):</label>
+                                <div class="input-action-row">
+                                    <input type="text" id="input-sym-key" class="form-control mono-text" placeholder="例如: 12ab34cd..." />
+                                    <button id="btn-gen-sym-key" class="btn btn-secondary btn-sm">生成随机</button>
+                                </div>
+                            </div>
+                            <button id="btn-encrypt-key" class="btn btn-primary w-100" disabled>
+                                <i class="fa-solid fa-lock"></i> 使用全局审计公钥加密对称密钥
+                            </button>
+                            <div id="encrypt-output" class="output-block hidden">
+                                <label>加密后的审计密文 (C_key):</label>
+                                <div class="copy-container">
+                                    <textarea id="txt-ciphertext-out" class="form-control mono-text" readonly rows="3"></textarea>
+                                    <button id="btn-copy-cipher" class="btn btn-sm btn-icon"><i class="fa-regular fa-copy"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-content hidden" id="tab-decrypt">
+                            <div class="form-group">
+                                <label for="input-ciphertext">审计密文 (C_key):</label>
+                                <textarea id="input-ciphertext" class="form-control mono-text" rows="3" placeholder="粘贴需要解密的交易审计密文..."></textarea>
+                            </div>
+
+                            <div class="btn-row">
+                                <button id="btn-gen-my-share" class="btn btn-secondary" disabled>
+                                    <i class="fa-solid fa-key"></i> 1. 计算我的解密份额
+                                </button>
+                                <button id="btn-aggregate-decryption" class="btn btn-success" disabled>
+                                    <i class="fa-solid fa-unlock"></i> 2. 门限解密还原
+                                </button>
+                            </div>
+
+                            <div class="shares-pool-container">
+                                <h4>当前已收集的局部解密份额 (需要至少 3 个)</h4>
+                                <div class="shares-grid" id="shares-pool-list">
+                                    <div class="empty-shares">暂未收集到解密份额，请各节点点击“计算我的解密份额”进行提交。</div>
+                                </div>
+                                <!-- 手动导入其他节点份额的面板 -->
+                                <div class="manual-share-import">
+                                    <button id="btn-toggle-manual-import" class="btn-link">手动导入其他节点份额</button>
+                                    <div id="manual-import-row" class="hidden">
+                                        <div class="import-inputs">
+                                            <select id="import-node-id" class="form-select font-small">
+                                                <option value="1">节点 1</option>
+                                                <option value="2">节点 2</option>
+                                                <option value="3">节点 3</option>
+                                                <option value="4">节点 4</option>
+                                                <option value="5">节点 5</option>
+                                            </select>
+                                            <input type="text" id="import-share-hex" class="form-control font-small mono-text" placeholder="解密份额十六进制点..." />
+                                        </div>
+                                        <button id="btn-submit-imported-share" class="btn btn-secondary btn-sm mt-1">添加份额</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="decrypt-output" class="output-block success-block hidden">
+                                <label><i class="fa-solid fa-circle-check text-success"></i> 门限解密还原成功！对称密钥 (SymKey):</label>
+                                <div class="mono-text font-large highlight-text" id="txt-decrypted-key">0x...</div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+
+        <!-- View 2: User Shielded Wallet -->
+        <div id="view-wallet" class="view-content hidden">
+            <main class="main-grid">
+                <!-- Left: Wallet Operations Card -->
+                <section class="stepper-panel card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-wallet text-gradient"></i> 隐私钱包操作中心</h2>
+                        <span class="subtitle">进行代币的存入、转账和提取等隐私保护操作</span>
+                    </div>
+                    
+                    <div class="wallet-tabs" style="margin-top: 15px;">
+                        <div class="audit-tabs">
+                            <button class="wallet-tab-btn active" data-wtab="wtab-deposit">存入 (Deposit)</button>
+                            <button class="wallet-tab-btn" data-wtab="wtab-transfer">隐私转账 (Transfer)</button>
+                            <button class="wallet-tab-btn" data-wtab="wtab-withdraw">提款 (Withdraw)</button>
+                        </div>
+                    </div>
+
+                    <!-- Deposit Tab -->
+                    <div class="wallet-tab-content" id="wtab-deposit">
+                        <div class="info-alert" style="margin-bottom: 15px; font-size: 0.85rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); padding: 10px; border-radius: 8px; color: #93C5FD; width: 100%;">
+                            <i class="fa-solid fa-circle-info"></i> <strong>存款流程：</strong> 将公开余额中的 $MCK$ 转换成屏蔽池中的隐私 Note，这需要授权 (Approve) 和存入 (Deposit) 两笔交易。
+                        </div>
+                        <div class="form-group">
+                            <label for="input-deposit-amount">存入金额 (MCK):</label>
+                            <input type="number" id="input-deposit-amount" class="form-control" placeholder="输入充值数量，例如: 100" min="1" value="100" />
+                        </div>
+                        <div class="btn-row" style="margin-top: 15px;">
+                            <button id="btn-wallet-approve" class="btn btn-secondary w-100">
+                                <i class="fa-solid fa-check-double"></i> 1. 授权代币
+                            </button>
+                            <button id="btn-wallet-deposit" class="btn btn-success w-100" disabled>
+                                <i class="fa-solid fa-cloud-arrow-up"></i> 2. 存入屏蔽池
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Transfer Tab -->
+                    <div class="wallet-tab-content hidden" id="wtab-transfer">
+                        <div class="form-group">
+                            <label for="input-transfer-recipient">接收方以太坊地址 (合规审计申报):</label>
+                            <input type="text" id="input-transfer-recipient" class="form-control mono-text" placeholder="输入接收方公开以太坊地址 0x..." />
+                        </div>
+                        <div class="form-group" style="margin-top: 12px;">
+                            <label for="input-transfer-recipient-pubkey">接收方隐私收款地址 (64位公钥 Hex):</label>
+                            <input type="text" id="input-transfer-recipient-pubkey" class="form-control mono-text" placeholder="输入接收方公钥 0x..." />
+                        </div>
+                        <div class="form-group" style="margin-top: 12px;">
+                            <label for="input-transfer-amount">转账金额 (MCK):</label>
+                            <input type="number" id="input-transfer-amount" class="form-control" placeholder="输入隐私转账数量" min="1" />
+                        </div>
+
+                        <button id="btn-wallet-transfer" class="btn btn-primary w-100" style="margin-top: 15px;">
+                            <i class="fa-solid fa-paper-plane"></i> 发送隐私转账交易
+                        </button>
+                    </div>
+
+                    <!-- Withdraw Tab -->
+                    <div class="wallet-tab-content hidden" id="wtab-withdraw">
+                        <div class="form-group">
+                            <label for="input-withdraw-amount">提款金额 (MCK):</label>
+                            <input type="number" id="input-withdraw-amount" class="form-control" placeholder="输入提款数量" min="1" />
+                        </div>
+                        <div class="form-group" style="margin-top: 12px;">
+                            <label for="input-withdraw-recipient">公开代币接收地址 (默认为当前钱包):</label>
+                            <input type="text" id="input-withdraw-recipient" class="form-control mono-text" placeholder="留空默认提到当前连接钱包" />
+                        </div>
+                        <button id="btn-wallet-withdraw" class="btn btn-accent w-100" style="margin-top: 15px;">
+                            <i class="fa-solid fa-reply-all"></i> 提款至公开代币
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Right: Wallet Balance & Note Info -->
+                <div class="right-panel">
+                    <section class="status-card card">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-wallet text-gradient"></i> 我的资产状态</h2>
+                        </div>
+                        <div class="status-grid">
+                            <div class="status-row">
+                                <span class="status-label">公开 MCK 余额:</span>
+                                <span id="txt-public-balance" class="mono-text font-large highlight-text">0.00 MCK</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">隐私屏蔽余额:</span>
+                                <span id="txt-private-balance" class="mono-text font-large highlight-text" style="color: #34D399;">0.00 MCK</span>
+                            </div>
+                            <div class="status-row" style="flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; width: 100%;">
+                                <span class="status-label">我的隐私收款地址 (公钥 G1 Hex):</span>
+                                <div class="copy-container" style="width: 100%; display: flex; gap: 5px;">
+                                    <input type="text" id="txt-my-privacy-address" class="form-control mono-text font-small" readonly placeholder="连接钱包并签名后生成..." style="flex: 1;" />
+                                    <button id="btn-copy-privacy-address" class="btn btn-sm btn-icon" style="padding: 0 10px;"><i class="fa-regular fa-copy"></i></button>
+                                </div>
+                            </div>
+                            <div class="status-row">
+                                <div class="btn-row" style="width: 100%; margin-top: 10px;">
+                                    <button id="btn-wallet-mint" class="btn btn-secondary btn-sm w-100">
+                                        <i class="fa-solid fa-coins"></i> 免费领 $1000 MCK 测试币
+                                    </button>
+                                    <button id="btn-wallet-refresh" class="btn btn-secondary btn-sm">
+                                        <i class="fa-solid fa-sync"></i> 刷新
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="nodes-table-container" style="margin-top: 20px;">
+                            <h3>我的隐私 Note 列表</h3>
+                            <table class="nodes-table">
+                                <thead>
+                                    <tr>
+                                        <th>叶子索引</th>
+                                        <th>金额 (MCK)</th>
+                                        <th>秘密值 (Secret)</th>
+                                        <th>花费状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="wallet-notes-body">
+                                    <tr><td colspan="4" class="text-center text-muted">暂无隐私资产 Note</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+
+        <!-- View 3: Auditor Query Panel -->
+        <div id="view-audit" class="view-content hidden">
+            <main class="main-grid">
+                <!-- Left: Transactions List Card -->
+                <section class="stepper-panel card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-list-check text-gradient"></i> 链上隐私转账检索</h2>
+                        <span class="subtitle">检索最近发生的隐私转账 (Transact) 事件并加载合规审计密文</span>
+                    </div>
+
+                    <div class="nodes-table-container" style="margin-top: 15px;">
+                        <table class="nodes-table">
+                            <thead>
+                                <tr>
+                                    <th>交易哈希</th>
+                                    <th>输出 1 承诺</th>
+                                    <th>输出 2 承诺</th>
+                                    <th>审计密文 (C_key)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-txs-body">
+                                <tr><td colspan="4" class="text-center text-muted">正在检索最新交易日志...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Right: Audit Decryption & Verification Card -->
+                <div class="right-panel">
+                    <section class="audit-card card">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-gavel text-gradient"></i> 合规审查控制台</h2>
+                            <span class="subtitle">收集 3 个审计节点局部份额以还原隐私交易的隐藏属性</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label>选中交易哈希:</label>
+                            <input type="text" id="audit-selected-tx" class="form-control mono-text font-small" readonly placeholder="请从左侧列表选择一笔交易..." />
+                        </div>
+
+                        <div class="form-group" style="margin-top: 12px;">
+                            <label>审计密文 (C_key):</label>
+                            <textarea id="audit-selected-ciphertext" class="form-control mono-text" rows="2" readonly placeholder="选中交易的加密对称密钥..."></textarea>
+                        </div>
+
+                        <div class="btn-row" style="margin-top: 15px;">
+                            <button id="btn-audit-gen-share" class="btn btn-secondary" disabled>
+                                <i class="fa-solid fa-key"></i> 1. 计算我的解密份额
+                            </button>
+                            <button id="btn-audit-decrypt" class="btn btn-success" disabled>
+                                <i class="fa-solid fa-unlock"></i> 2. 门限解密并审查
+                            </button>
+                        </div>
+
+                        <div class="shares-pool-container" style="margin-top: 15px;">
+                            <h4>已收集的局部解密份额 (需要 3 个)</h4>
+                            <div class="shares-grid" id="audit-shares-pool">
+                                <div class="empty-shares">暂未收集到解密份额，请各审计员切换钱包账户点击上方按钮生成。</div>
+                            </div>
+                        </div>
+
+                        <!-- Decrypted Compliance Detail output -->
+                        <div id="compliance-result-output" class="output-block hidden" style="margin-top: 20px;">
+                            <h3 style="margin-bottom: 10px; color: var(--color-accent); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; font-size: 1rem;">
+                                <i class="fa-solid fa-clipboard-check"></i> 审计解密明细 (Audited Details)
+                            </h3>
+                            <div class="status-grid font-small">
+                                <div class="status-row">
+                                    <span class="status-label">实际发送方:</span>
+                                    <span id="res-sender-addr" class="mono-text font-small">0x...</span>
+                                </div>
+                                <div class="status-row">
+                                    <span class="status-label">实际接收方:</span>
+                                    <span id="res-recipient-addr" class="mono-text font-small">0x...</span>
+                                </div>
+                                <div class="status-row">
+                                    <span class="status-label">转账明细金额:</span>
+                                    <span id="res-amount" class="mono-text font-small highlight-text">0.00 MCK</span>
+                                </div>
+                                <div class="status-row">
+                                    <span class="status-label">合规判定结论:</span>
+                                    <span id="res-conclusion" class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3);">合规 🟢</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loading-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="spinner"></div>
+            <p id="loading-text">正在处理中，请稍候...</p>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast-container"></div>
+
+    <!-- Core App Logic -->
+    <script type="module" src="index.js?v=3"></script>
+</body>
+</html>

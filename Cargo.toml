@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "circuits",
     "client",
+    "wasm",
 ]
 
 [workspace.package]
